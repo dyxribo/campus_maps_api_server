@@ -1,0 +1,23 @@
+{
+  "name": "bx_web_server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "blaxstar.net web server.",
+  "main": "bx_web_server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dyxribo/blaxstar_web.git"
+  },
+  "author": "dyxribo",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dyxribo/blaxstar_web/issues"
+  },
+  "homepage": "https://github.com/dyxribo/blaxstar_web#readme",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
