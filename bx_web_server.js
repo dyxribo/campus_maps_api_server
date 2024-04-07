@@ -21,14 +21,12 @@ app.get("/", (req, res) => {
 app.get("/api/login", (req, res) => {
   // first get the auth header and store it in a variable
   var ahead = req.header("Authorization");
-  // get the b64 cred string as arr
+  // get the b64 cred string as arr by splitting by space, then colon
   var crd = atob(ahead.split(" ")[1]).split(":");
   var usr = crd[0];
   var srt = crd[1];
-  // hash the srt for comparison
-  const salt = crypto.randomBytes(16);
 
-  // get the user from the db
+  // get the user from the db and verify the srt
   db.serialize(
     () => {
       db.get(`SELECT * FROM usr_tbl WHERE username = "${usr}"`, (err, row) => {
@@ -36,21 +34,23 @@ app.get("/api/login", (req, res) => {
           res.send("<h1>USER_NOT_FOUND</h1>");
         } else {
           if (verify_srt(srt, row.srt)) {
+            // generate new tokens if srt is valid
             var jwt_pld = {
               iss: `${usr}`,
               admin: `${row.adm}`,
               exp: Math.floor(Date.now() / 1000) + 60 * 1,
             };
-
+            
             const at = sign_jwt(jwt_pld, "access");
             const rt = sign_jwt(jwt_pld, "refresh");
 
-            // send the items to the client in the form of a jwt
             if (at && rt) {
+              // return new tokens
               res.setHeader("Authorization", `Bearer ${at}`);
               res.setHeader("X-REF-TOK", rt);
               res.status(STATUS_OK).send("OK");
             } else {
+              // return error if new tokens could not be generated
               res.status(STATUS_SERVER_ERROR).send({
                 err: "could not generate token, please try again later.",
               });
@@ -58,32 +58,33 @@ app.get("/api/login", (req, res) => {
           }
         }
       });
-      // if the user exists, get the user's items from the db
-    } // we'll need to send a jwt, so define the header and body
+    } 
   );
 });
 
 app.post("/api/rftkn", (req, res) => {
-  // get the auth header and store it in a variable
-  var tkn = req.header("X-REF-TOK");
-  // get the b64 cred string as arr
-
+  // get the auth header and verify refresh token
+  const tkn = req.header("X-REF-TOK");
   const rt_pld = verify_jwt(tkn, "refresh");
-  // TODO: generate new tokens if refresh token is valid, otherwise return expired response, forcing user to log back in
+  
   if (rt_pld) {
+    // sign new tokens if the refresh token is valid
     let new_at = sign_jwt(rt_pld, "access");
     let new_rt = sign_jwt(rt_pld, "refresh");
 
     if (new_at && new_rt) {
+      // return new tokens
       res.setHeader("Authorization", `Bearer ${new_at}`);
       res.setHeader("X-REF-TOK", new_rt);
       res.status(STATUS_OK).send("TKRF OK");
     } else {
+      // return error if new tokens could not be generated
       res.status(STATUS_SERVER_ERROR).send({
         err: "could not generate token, please try again later.",
       });
     }
   } else {
+    // return error if refresh token is invalid
     res.status(STATUS_UNUATHORIZED).send({
       err: "invalid refresh token, please log in again.",
     });
@@ -103,6 +104,7 @@ app.listen(5000, () => {
 });
 
 async function verify_srt(srt, hash) {
+  // verify the srt using argon2
   if (await argon2.verify(hash, srt)) {
     return true;
   }
@@ -110,6 +112,7 @@ async function verify_srt(srt, hash) {
 }
 
 async function hash_srt(srt) {
+  // hash the srt using argon2
   const hash_options = {
     type: argon2.argon2id,
     tagLength: 32,
@@ -118,6 +121,7 @@ async function hash_srt(srt) {
 }
 
 function sign_jwt(pld, tkn_type, options) {
+  // check the token type and update the payload accordingly
   if (tkn_type == "access") {
     // 1 min access token TODO: change back to 15 min
     pld.exp = Math.floor(Date.now() / 1000) + 60 * 1;
@@ -125,20 +129,23 @@ function sign_jwt(pld, tkn_type, options) {
     // 1 min refresh token TODO: change back to 1 hr
     pld.exp = Math.floor(Date.now() / 1000) + 60 * 1;
   } else {
+    // invalid token type
     console.log("invalid token type @ sign_jwt ln 119!");
     return null;
   }
 
+  // create a buffer using the private key and convert it to ascii
   const pk = Buffer.from(
     tkn_type == "access" ? process.env.atpk : process.env.rtpk,
     "base64"
   ).toString("ascii");
-
+  // sign the payload with the private key
   return jwt.sign(pld, pk, { ...(options && options), algorithm: "RS256" });
 }
 
 function verify_jwt(tkn, tkn_type) {
-  var tknkey;
+  // check the token type and use the appropriate key 
+  let tknkey;
   if (tkn_type == "access") {
     tknkey = process.env.atpbk;
   } else if (tkn_type == "refresh") {
@@ -149,17 +156,16 @@ function verify_jwt(tkn, tkn_type) {
   }
 
   try {
+    // create a buffer using the public key and convert it to ascii
     const pbk = Buffer.from(tknkey, "base64").toString("ascii");
+    // verify the token with the public key
     const decoded = jwt.verify(tkn, pbk);
+    // return the decoded payload
     return decoded;
   } catch (e) {
-    if (e.message == "jwt expired") {
-      console.log("token expired!");
-      return null;
-    } else if (e.message == "invalid token") {
-      console.log("invalid token!");
-      return null;
-    }
+    // log the error
+    console.log(e.message ? e.message : e);
+    // return null if the token could not be verified
     return null;
   }
 }
