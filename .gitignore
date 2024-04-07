@@ -2,3 +2,5 @@
 *.env
 *.pem
 *.db
+*.bfg-report
+node_modules
