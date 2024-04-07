@@ -1,0 +1,4 @@
+*.http
+*.env
+*.pem
+*.db

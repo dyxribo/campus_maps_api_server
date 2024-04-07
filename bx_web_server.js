@@ -9,13 +9,16 @@ cream.config();
 sqlite3.verbose();
 
 const app = express();
-const db = new sqlite3.Database("C:\\eng\\js\\cm_users.db");
+const db = new sqlite3.Database(process.env.usrdb_path);
+const STATUS_UNUATHORIZED = 401;
+const STATUS_SERVER_ERROR = 500;
+const STATUS_OK = 200;
 
 app.get("/", (req, res) => {
   res.send("<h1>hello from blaxstar!</h1>");
 });
 
-app.get("/login", (req, res) => {
+app.get("/api/login", (req, res) => {
   // first get the auth header and store it in a variable
   var ahead = req.header("Authorization");
   // get the b64 cred string as arr
@@ -46,9 +49,9 @@ app.get("/login", (req, res) => {
             if (at && rt) {
               res.setHeader("Authorization", `Bearer ${at}`);
               res.setHeader("X-REF-TOK", rt);
-              res.status(200).send("OK");
+              res.status(STATUS_OK).send("OK");
             } else {
-              res.send({
+              res.status(STATUS_SERVER_ERROR).send({
                 err: "could not generate token, please try again later.",
               });
             }
@@ -60,7 +63,7 @@ app.get("/login", (req, res) => {
   );
 });
 
-app.post("/rftkn", (req, res) => {
+app.post("/api/rftkn", (req, res) => {
   // get the auth header and store it in a variable
   var tkn = req.header("X-REF-TOK");
   // get the b64 cred string as arr
@@ -68,10 +71,31 @@ app.post("/rftkn", (req, res) => {
   const rt_pld = verify_jwt(tkn, "refresh");
   // TODO: generate new tokens if refresh token is valid, otherwise return expired response, forcing user to log back in
   if (rt_pld) {
-    console.log("✅Refresh token is valid!");
+    let new_at = sign_jwt(rt_pld, "access");
+    let new_rt = sign_jwt(rt_pld, "refresh");
+
+    if (new_at && new_rt) {
+      res.setHeader("Authorization", `Bearer ${new_at}`);
+      res.setHeader("X-REF-TOK", new_rt);
+      res.status(STATUS_OK).send("TKRF OK");
+    } else {
+      res.status(STATUS_SERVER_ERROR).send({
+        err: "could not generate token, please try again later.",
+      });
+    }
   } else {
-    console.log("🔥Refresh token is invalid or has expired!");
+    res.status(STATUS_UNUATHORIZED).send({
+      err: "invalid refresh token, please log in again.",
+    });
   }
+});
+
+app.get("/api/logout", (req, res) => {
+  res.status(STATUS_OK).send("OK");
+});
+
+app.get("/api/maps", () => {
+  res.status(STATUS_OK).send("OK");
 });
 
 app.listen(5000, () => {
@@ -95,13 +119,13 @@ async function hash_srt(srt) {
 
 function sign_jwt(pld, tkn_type, options) {
   if (tkn_type == "access") {
-    // 15 min access token
-    pld.exp = Math.floor(Date.now() / 1000) + 60 * 15;
+    // 1 min access token TODO: change back to 15 min
+    pld.exp = Math.floor(Date.now() / 1000) + 60 * 1;
   } else if (tkn_type == "refresh") {
-    // 1 hr refresh token
-    pld.exp = Math.floor(Date.now() / 1000) + 60 * 60;
+    // 1 min refresh token TODO: change back to 1 hr
+    pld.exp = Math.floor(Date.now() / 1000) + 60 * 1;
   } else {
-    console.log("invalid token type @ sign_jwt ln 108!");
+    console.log("invalid token type @ sign_jwt ln 119!");
     return null;
   }
 
@@ -120,7 +144,7 @@ function verify_jwt(tkn, tkn_type) {
   } else if (tkn_type == "refresh") {
     tknkey = process.env.rtpbk;
   } else {
-    console.log("invalid token type @ verify_jwt ln 127!");
+    console.log("invalid token type @ verify_jwt ln 138!");
     return null;
   }
 
