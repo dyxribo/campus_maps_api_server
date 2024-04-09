@@ -3,4 +3,7 @@
 *.pem
 *.db
 *.bfg-report
+*.db-shm
+*.db.bak
+*.db-wal
 node_modules
