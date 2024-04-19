@@ -313,7 +313,7 @@ function verify_jwt(token, token_type) {
   } else if (token_type == "refresh") {
     rsa_key = process.env.rtpbk;
   } else {
-    console.log("invalid token type @ verify_jwt ln 3!");
+    console.log("invalid token type @ verify_jwt ln 316!");
     return null;
   }
 
