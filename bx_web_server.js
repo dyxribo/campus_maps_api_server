@@ -313,7 +313,7 @@ function verify_jwt(token, token_type) {
   } else if (token_type == "refresh") {
     rsa_key = process.env.rtpbk;
   } else {
-    console.log("invalid token type @ verify_jwt ln 316!");
+    console.log("invalid token type @ verify_jwt ln 3!");
     return null;
   }
 
@@ -438,13 +438,14 @@ async function activate_user(activation_token) {
 }
 
 function update_server_map(client_mod_date, client_changes) {
-  // lets loop through each object in the client_data to see if any of them exist already, and decide which kind of operation we're gonna do
+  
   let update_status = { status: STATUS_OK };
   let database_map_row;
   let database_map;
   let flattened_changes;
 
   try {
+    // first check the db against the modification date for the incoming data
     database_map_row = maps_database.prepare("SELECT * from map_data WHERE modified_date < ?").get(client_mod_date);
   } catch (e) {
     update_status.status = STATUS_SERVER_ERROR;
@@ -453,21 +454,23 @@ function update_server_map(client_mod_date, client_changes) {
   }
 
   if (database_map_row) {
+    // if the check was successful, we flatten the json from the db for easy comparison
     database_map = flatten(JSON.parse(database_map_row.data));
   } else {
+    // otherwise we send back an error
     update_status.status = STATUS_SERVER_ERROR;
     update_status['error'] = "newer changes on server, pending client sync. please send another request to update database after syncing.";
     update_status['data'] = maps_database.prepare("SELECT data from map_data").get().data;
     return update_status;
   }
-
+  // flatten the the incoming changes for easy comparison
   flattened_changes = flatten(client_changes);
   let changed_properties = Object.keys(flattened_changes);
-
+  // compare the incoming changes to the db and update the db json
   for (let property_name of changed_properties) {
     database_map[property_name] = flattened_changes[property_name];
   }
-
+  // then write the json back to the db, updating the modify date as well
   update_map_db('map_data', JSON.stringify(unflatten(database_map)), Date.now() / 1000);
   update_status['data'] = unflatten(database_map);
 
