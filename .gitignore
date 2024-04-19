@@ -7,3 +7,5 @@
 *.db.bak
 *.db-wal
 node_modules
+*mock.json
+*.sql
