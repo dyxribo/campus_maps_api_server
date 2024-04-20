@@ -1,5 +1,5 @@
 import express from "express";
-import bp from "body-parser";
+import body_parser from "body-parser";
 import Database from "better-sqlite3";
 import argon2 from "argon2";
 import jwt from "jsonwebtoken";
@@ -29,14 +29,14 @@ token_denylist_database.pragma("journal_mode = WAL");
 maps_database.pragma("journal_mode = WAL");
 // parse url encoded variables and json body from incoming requests
 app.use(
-  bp.urlencoded({
+  body_parser.urlencoded({
     extended: true,
     limit: "50mb",
     parameterLimit: 100000,
   })
 );
 app.use(
-  bp.json({
+  body_parser.json({
     limit: "50mb",
     parameterLimit: 100000,
   })
@@ -324,9 +324,9 @@ function verify_jwt(token, token_type) {
     const decoded_token = jwt.verify(token, public_key);
     // return the decoded payload
     return decoded_token;
-  } catch (e) {
+  } catch (error) {
     // log the error
-    console.log(e.message ? e.message : e);
+    console.log(error.message ? error.message : error);
     // return null if the token could not be verified
     return null;
   }
@@ -355,8 +355,8 @@ function revoke_token(token, exp) {
     token_denylist_database
       .prepare("INSERT INTO denied_tkns values (?, ?)")
       .run(token, exp);
-  } catch (e) {
-    console.log(e);
+  } catch (error) {
+    console.log(error);
     return false
   }
   return true;
@@ -405,8 +405,8 @@ async function send_activation_email(email, username) {
         console.log("email sent: " + info.response);
       }
     });
-  } catch (e) {
-    console.log(e);
+  } catch (error) {
+    console.log(error);
   }
 }
 
@@ -431,8 +431,8 @@ async function activate_user(activation_token) {
         .prepare("UPDATE users SET activated = 1 WHERE username = ?")
         .run(username);
       console.log("USER ACTIVATION OK");
-    } catch (e) {
-      console.log(e);
+    } catch (error) {
+      console.log(error);
     }
   }
 }
@@ -447,9 +447,9 @@ function update_server_map(client_mod_date, client_changes) {
   try {
     // first check the db against the modification date for the incoming data
     database_map_row = maps_database.prepare("SELECT * from map_data WHERE modified_date < ?").get(client_mod_date);
-  } catch (e) {
+  } catch (error) {
     update_status.status = STATUS_SERVER_ERROR;
-    update_status["error"] = e;
+    update_status.message = error;
     return update_status;
   }
 
@@ -459,8 +459,8 @@ function update_server_map(client_mod_date, client_changes) {
   } else {
     // otherwise we send back an error
     update_status.status = STATUS_SERVER_ERROR;
-    update_status['error'] = "newer changes on server, pending client sync. please send another request to update database after syncing.";
-    update_status['data'] = maps_database.prepare("SELECT data from map_data").get().data;
+    update_status.message = "newer changes on server, pending client sync. please send another request to update database after syncing.";
+    update_status.data = maps_database.prepare("SELECT data from map_data").get().data;
     return update_status;
   }
   // flatten the the incoming changes for easy comparison
@@ -472,7 +472,7 @@ function update_server_map(client_mod_date, client_changes) {
   }
   // then write the json back to the db, updating the modify date as well
   update_map_db('map_data', JSON.stringify(unflatten(database_map)), Date.now() / 1000);
-  update_status['data'] = unflatten(database_map);
+  update_status.data = unflatten(database_map);
 
   return update_status;
 }
@@ -481,7 +481,7 @@ function update_client_map(client_mod_date) {
   // we'll use a json object for storing the updates.
   var update_status = { status: STATUS_OK };
   
-  update_status['data'] = maps_database.prepare("SELECT data from map_data").get().data;
+  update_status.data = maps_database.prepare("SELECT data from map_data").get().data;
 
   return update_status;
 }
@@ -493,7 +493,7 @@ function insert_into_map_db(table, ...values) {
     maps_database.prepare("INSERT INTO " + table + " VALUES (" + values.join(',') + ")").run();
   } catch (error) {
     status.status = STATUS_SERVER_ERROR;
-    status['error'] = error;
+    status.message = error;
   }
   return status;
 }
@@ -504,7 +504,7 @@ function update_map_db(table, ...values) {
   
   if (values.length < 2) {
     status.status = STATUS_SERVER_ERROR;
-    status.error = "got " + values.length + " values for map db update, expected 2.";
+    status.message = "got " + values.length + " values for map db update, expected 2.";
     return status;
   }
 
@@ -514,7 +514,7 @@ function update_map_db(table, ...values) {
     maps_database.prepare(statement).run();
   } catch (error) {
     status.status = STATUS_SERVER_ERROR;
-    status['error'] = error;
+    status.message = error;
   }
   return status;
 }
